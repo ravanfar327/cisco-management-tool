@@ -1,0 +1,10 @@
+# --- Core (CLI + GUI) ---
+netmiko>=4.3.0
+cryptography>=42.0.0
+APScheduler>=3.10.0
+
+# --- GUI only (not needed for CLI-only use) ---
+PySide6>=6.6.0
+
+# --- Windows-only, optional (needed for "unattended startup" auto-backup) ---
+pywin32>=306 ; sys_platform == "win32"

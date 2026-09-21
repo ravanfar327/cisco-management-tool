@@ -1,0 +1,30 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+*.spec
+.venv/
+venv/
+env/
+
+# --- This project's sensitive/generated data - NEVER commit these ---
+devices.enc
+devices.salt
+master_password.dpapi
+backup_settings.json
+gui_preferences.json
+port_traffic_state.json
+security_audit.log
+security_audit.log.*
+cisco_mgmt.log
+cisco_mgmt.log.*
+backups/
+
+# --- Editor/OS cruft ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
