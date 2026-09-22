@@ -96,7 +96,7 @@ See [`BUILD.md`](BUILD.md) for step-by-step PyInstaller instructions for both th
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE). Replace `[Your Name]` in that file with your name (or organization) before publishing.
+MIT — see [`LICENSE`](LICENSE). Keep this software producer name for any publishing or copying.
 
 ## Contributing
 
