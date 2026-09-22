@@ -22,7 +22,7 @@ A Windows-friendly Python tool for managing Cisco (and other vendor) switches: t
 ![Dashboard](screenshots/dashboard.png)
 
 ### Login
-![Devices](screenshots/login.png)
+![Login](screenshots/Login.png)
 
 ### Settings
 ![Backup](screenshots/settings.png)
