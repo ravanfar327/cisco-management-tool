@@ -56,7 +56,7 @@ A Windows-friendly Python tool for managing Cisco (and other vendor) switches: t
 
 # Login
 <p align="center">
-  <img src="/screenshots/Login.png" alt="login" width="800"/>
+  <img src="/screenshots/Login.png" alt="login" width="500"/>
   <br/>
   <em>login</em>
 </p>
