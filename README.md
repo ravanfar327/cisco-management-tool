@@ -56,7 +56,7 @@ A Windows-friendly Python tool for managing Cisco (and other vendor) switches: t
 
 # Login
 <p align="center">
-  <img src="/screenshots/login.png" alt="login" width="800"/>
+  <img src="/screenshots/Login.png" alt="login" width="800"/>
   <br/>
   <em>login</em>
 </p>
@@ -95,9 +95,10 @@ pip install -r requirements.txt
 بسته‌های پایتونی موردنیاز را در فایل requirements.txt ببینید
 
 نصب وابستگی‌ها:
+</div>
 
     pip install -r requirements.txt
-</div>
+
 
 ## Usage
 
@@ -148,7 +149,7 @@ All project files must be in the same folder (no subfolders) — the GUI imports
 </div>
 
 ## Project layout
-
+```
 cisco_mgmt.py               Core backend: topology scan, backup, drift, idle ports, inventory, CLI menu
 device_manager.py           Encrypted device storage + CRUD
 backup_settings.py          Scheduled backup configuration
@@ -167,12 +168,12 @@ gui_dialogs.py              Unlock screen + device add/edit dialog
 gui_main_window.py          Main window, sidebar navigation
 gui_pages_*.py              One file per page (Devices, Backup, Config Drift, Idle Ports,
                             Inventory, IP Discovery, Settings, Audit Log)
-
+```
 
 <div dir="rtl">
 🇮🇷 ساختار پروژه
 
-
+```
 cisco_mgmt.py...............بک‌اند اصلی: اسکن توپولوژی، پشتیبان‌گیری، Drift، پورت‌های بی‌استفاده، موجودی، منوی CLI
 device_manager.py...........ذخیره‌سازی رمزنگاری‌شده دستگاه‌ها + عملیات CRUD
 backup_settings.py.........تنظیمات پشتیبان‌گیری زمان‌بندی‌شده
@@ -191,6 +192,7 @@ gui_dialogs.py..............صفحه ورود (Unlock) + دیالوگ افزود
 gui_main_window.py..........پنجره اصلی، ناوبری کناری
 gui_pages_*.py..............یک فایل برای هر صفحه (دستگاه‌ها، پشتیبان‌گیری، تغییرات کانفیگ،
                             پورت‌های بی‌استفاده، موجودی، کشف IP، تنظیمات، لاگ ممیزی)
+```
 </div>
 
 ## Building a standalone Windows .exe
