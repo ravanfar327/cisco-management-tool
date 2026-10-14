@@ -4,12 +4,13 @@ A Windows-friendly Python tool for managing Cisco (and other vendor) switches: t
 
 > Built and tested primarily against Cisco IOS/IOS-XE switches, with optional support for non-Cisco devices (Mikrotik, HP/Aruba, Juniper, Arista, ...) via a custom backup command per device.
 
-
+<div dir="rtl">
 🇮🇷 توضیحات فارسی
 
 ابزاری مبتنی بر پایتون و مناسب ویندوز برای مدیریت سوئیچ‌های سیسکو (و سایر برندها): کشف توپولوژی و IP، پشتیبان‌گیری رمزنگاری‌شده از کانفیگ به‌همراه زمان‌بندی، تشخیص تغییرات کانفیگ (Drift)، گزارش امنیتی پورت‌های بی‌استفاده و گزارش موجودی دستگاه‌ها — هم به‌صورت CLI و هم به‌صورت یک رابط گرافیکی دسکتاپ کامل.
 
     این پروژه عمدتاً روی سوئیچ‌های Cisco IOS/IOS-XE ساخته و تست شده است، اما با تعریف یک دستور پشتیبان‌گیری سفارشی برای هر دستگاه، امکان پشتیبانی از دستگاه‌های غیرسیسکو (Mikrotik، HP/Aruba، Juniper، Arista و ...) هم وجود دارد.
+</div>
 
 ## Features
 
@@ -23,6 +24,7 @@ A Windows-friendly Python tool for managing Cisco (and other vendor) switches: t
 - **Unattended startup on Windows** — securely save the master password via Windows DPAPI so scheduled backups can run headlessly from Task Scheduler at boot, with no one needing to type a password.
 - **Full GUI** — a PySide6 desktop app covering every feature above, with light/dark themes.
 
+<div dir="rtl">
 🇮🇷 ویژگی‌ها
 
     کشف توپولوژی / IP — با پیمایش همسایه‌های CDP از یک سوئیچ Core، مشخص می‌کند که یک IP یا MAC به کدام سوئیچ و کدام پورت فیزیکی متصل است.
@@ -42,20 +44,38 @@ A Windows-friendly Python tool for managing Cisco (and other vendor) switches: t
     راه‌اندازی خودکار در ویندوز — رمز اصلی به‌صورت امن با Windows DPAPI ذخیره می‌شود تا پشتیبان‌گیری‌های زمان‌بندی‌شده بتوانند هنگام بوت و بدون نیاز به وارد کردن رمز، از طریق Task Scheduler اجرا شوند.
 
     رابط گرافیکی کامل — یک اپلیکیشن دسکتاپ با PySide6 که تمام قابلیت‌های بالا را پوشش می‌دهد، همراه با تم روشن/تاریک.
+</div>
 
 ## Screenshots
 
-#Dashboard
-/screenshots/dashboard.png
+# Dashboard
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="Dashboard" width="800"/>
+  <br/>
+  <em>dashboard</em>
+</p>
 
-#ip_discovery
-/screenshots/ip_discovery.png
+# Login
+<p align="center">
+  <img src="docs/screenshots/login.png" alt="login" width="800"/>
+  <br/>
+  <em>login</em>
+</p>
 
-#Login
-/screenshots/Login.png
+# IP_Discovery
+<p align="center">
+  <img src="docs/screenshots/ip_discovery.png" alt="ip_discovery" width="800"/>
+  <br/>
+  <em>ip_discovery</em>
+</p>
 
-#settings
-/screenshots/settings.png
+# Settings
+<p align="center">
+  <img src="docs/screenshots/settings.png" alt="settings" width="800"/>
+  <br/>
+  <em>settings</em>
+</p>
+
 
 ## Requirements
 
@@ -67,6 +87,8 @@ Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
+
+<div dir="rtl">
 🇮🇷 پیش‌نیازها
 
     پایتون 3.11 یا بالاتر (ویندوز توصیه می‌شود؛ CLI چندسکویی است و قابلیت‌های مبتنی بر pywin32 فقط در ویندوز کار می‌کنند)
@@ -77,7 +99,7 @@ pip install -r requirements.txt
 bash
 
 pip install -r requirements.txt
-
+</div>
 
 ## Usage
 
@@ -99,14 +121,20 @@ python gui_app.py
 
 All project files must be in the **same folder** (no subfolders) — the GUI imports the CLI's backend modules directly.
 
+<div dir="rtl">
 🇮🇷 روش استفاده — CLI
+</div>
+
 bash
 
 python cisco_mgmt.py
 
+<div dir="rtl">
 از شما رمز اصلی خواسته می‌شود (برای رمزنگاری/رمزگشایی لیست دستگاه‌ها استفاده می‌شود — تا ۳ تلاش و سپس برنامه بسته می‌شود). پس از آن، یک منوی شماره‌دار مدیریت دستگاه‌ها، پشتیبان‌گیری، تغییرات کانفیگ، پورت‌های بی‌استفاده، موجودی و خروج را پوشش می‌دهد.
 
 برای اجرای پشتیبان‌گیری‌های زمان‌بندی‌شده به‌صورت خودکار (مثلاً با Windows Task Scheduler)، از گزینه «Backup > Enable unattended startup» در منوی CLI استفاده کنید — دستور دقیق برای ثبت در Task Scheduler چاپ می‌شود.
+</div>
+
 GUI
 bash
 
@@ -114,13 +142,17 @@ python gui_app.py
 
 All project files must be in the same folder (no subfolders) — the GUI imports the CLI's backend modules directly.
 
+<div dir="rtl">
 🇮🇷 روش استفاده — GUI
+</div>
+
 bash
 
 python gui_app.py
 
+<div dir="rtl">
 تمام فایل‌های پروژه باید در یک پوشه باشند (بدون زیرپوشه) — چون GUI مستقیماً ماژول‌های بک‌اند CLI را ایمپورت می‌کند.
-
+</div>
 
 ## Project layout
 
@@ -145,6 +177,7 @@ gui_pages_*.py              One file per page (Devices, Backup, Config Drift, Id
                             Inventory, IP Discovery, Settings, Audit Log)
 ```
 
+<div dir="rtl">
 🇮🇷 ساختار پروژه
 text
 
@@ -166,16 +199,17 @@ gui_dialogs.py              صفحه ورود (Unlock) + دیالوگ افزود
 gui_main_window.py          پنجره اصلی، ناوبری کناری
 gui_pages_*.py              یک فایل برای هر صفحه (دستگاه‌ها، پشتیبان‌گیری، تغییرات کانفیگ،
                             پورت‌های بی‌استفاده، موجودی، کشف IP، تنظیمات، لاگ ممیزی)
-
+</div>
 
 ## Building a standalone Windows .exe
 
 See [`BUILD.md`](BUILD.md) for step-by-step PyInstaller instructions for both the CLI and GUI.
 
+<div dir="rtl">
 🇮🇷 ساخت فایل اجرایی مستقل ویندوز (.exe)
 
 برای دستورالعمل‌های گام‌به‌گام PyInstaller جهت ساخت هر دو نسخه CLI و GUI به BUILD.md مراجعه کنید.
-
+</div>
 
 
 ## Security notes
@@ -185,6 +219,7 @@ See [`BUILD.md`](BUILD.md) for step-by-step PyInstaller instructions for both th
 - "Unattended startup" trades password-prompt security for automation: once enabled, anyone who can run code as your Windows user can decrypt the device list. Only enable it on a machine/account you control.
 - Never commit `devices.enc`, `devices.salt`, `master_password.dpapi`, `backup_settings.json`, `gui_preferences.json`, or any `*.log` file to version control — see [`.gitignore`](.gitignore).
 
+<div dir="rtl">
 🇮🇷 نکات امنیتی
 
     لیست دستگاه‌ها (devices.enc) با کلیدی که از رمز اصلی شما مشتق می‌شود رمزنگاری شده است. اگر رمز اصلی را گم کنید، بازیابی لیست دستگاه‌ها امکان‌پذیر نیست.
@@ -194,6 +229,7 @@ See [`BUILD.md`](BUILD.md) for step-by-step PyInstaller instructions for both th
     گزینه «Unattended startup» امنیت ناشی از پرسیدن رمز را با خودکارسازی معاوضه می‌کند: پس از فعال‌سازی، هر کسی که بتواند با حساب ویندوزی شما کد اجرا کند، قادر به رمزگشایی لیست دستگاه‌ها خواهد بود. این گزینه را فقط روی ماشین/حسابی که خودتان کنترل می‌کنید فعال کنید.
 
     هرگز فایل‌های devices.enc، devices.salt، master_password.dpapi، backup_settings.json، gui_preferences.json یا هیچ فایل *.log را در سیستم کنترل نسخه (Version Control) قرار ندهید — به .gitignore مراجعه کنید.
+</div>
 
 ## License
 
@@ -203,5 +239,7 @@ MIT — see [`LICENSE`]. Keep this software producer name for any publishing or 
 
 Issues and pull requests are welcome. Please avoid including real device credentials, IPs, or hostnames in any issue/PR content.
 
+<div dir="rtl">
 🇮🇷 مشارکت
 Issue و Pull Request پذیرفته می‌شود. لطفاً از درج اطلاعات واقعی دستگاه‌ها مثل رمز عبور، IP یا نام هاست در محتوای Issue/PR خودداری کنید.
+</div>
