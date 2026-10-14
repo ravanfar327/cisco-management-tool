@@ -19,6 +19,15 @@ import os
 # از یک پوشه‌ی دیگر اجرا شود، چه بعداً با PyInstaller به exe تبدیل شود.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# حالت headless برای Windows Task Scheduler: وقتی با '--run-backup-once' اجرا
+# شود، هیچ پنجره‌ای ساخته نمی‌شود و حتی PySide6 import نمی‌شود - فقط یک دور
+# بک‌آپ می‌گیرد و خارج می‌شود. (در exe ساخته‌شده با --windowed هم همین
+# مسیر کار می‌کند، چون هیچ UI‌ای لازم ندارد.)
+if "--run-backup-once" in sys.argv:
+    import cisco_mgmt
+    cisco_mgmt.run_backup_once_headless()
+    sys.exit(0)
+
 from PySide6.QtWidgets import QApplication
 
 from gui_theme import build_stylesheet

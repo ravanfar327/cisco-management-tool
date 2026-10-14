@@ -24,6 +24,8 @@ from gui_pages_idle_ports import IdlePortsPage
 from gui_pages_inventory import InventoryPage
 from gui_pages_audit_log import AuditLogPage
 from gui_pages_ip_discovery import IpDiscoveryPage
+from gui_scheduler import GuiScheduler
+import windows_task
 
 
 def _get_last_backup_times() -> dict:
@@ -183,8 +185,15 @@ class MainWindow(QMainWindow):
             self.master_password,
             self._on_password_changed,
             self._on_theme_changed,
+            self._on_schedule_saved,
+            self._apply_schedule,
         )
         self.audit_log_page = AuditLogPage()
+
+        # scheduler واقعی بک‌آپ خودکار - با تنظیمات ذخیره‌شده از همان
+        # لحظه‌ی باز شدن برنامه شروع می‌شود (نه فقط بعد از Save کردن).
+        self.scheduler = GuiScheduler()
+        self._apply_schedule()
 
         nav_items = [
             ("Dashboard", self.dashboard_page, True),
@@ -242,6 +251,27 @@ class MainWindow(QMainWindow):
         """
         self.master_password = new_password
         self.devices_page.master_password = new_password
+
+    def _apply_schedule(self) -> bool:
+        """
+        دقیقاً یکی از دو مکانیزم بک‌آپ زمان‌بندی‌شده فعال می‌ماند:
+        - اگر Task ویندوز ثبت شده باشد، خود ویندوز بک‌آپ را اجرا می‌کند (حتی
+          با بسته بودن برنامه) و job داخلی GUI خاموش می‌شود تا بک‌آپ دوبار
+          انجام نشود.
+        - در غیر این صورت، scheduler داخلی GUI (فقط تا وقتی برنامه باز است).
+        """
+        if windows_task.task_exists():
+            self.scheduler.clear()
+            return True
+        return self.scheduler.reconfigure(self.devices, self.settings)
+
+    def _on_schedule_saved(self, settings: dict) -> bool:
+        self.settings = settings
+        return self._apply_schedule()
+
+    def closeEvent(self, event) -> None:
+        self.scheduler.shutdown()
+        super().closeEvent(event)
 
     def _on_theme_changed(self, theme: str) -> None:
         self.app.setStyleSheet(build_stylesheet(theme))

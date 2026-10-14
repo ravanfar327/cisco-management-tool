@@ -1554,16 +1554,88 @@ def run_scheduled_backup_job(devices: list, settings: dict) -> None:
         run_backup(d, settings)
 
 
+WEEKDAY_ALIASES = {
+    "monday": "mon",
+    "tuesday": "tue",
+    "wednesday": "wed",
+    "thursday": "thu",
+    "friday": "fri",
+    "saturday": "sat",
+    "sunday": "sun",
+}
+
+
+def build_cron_trigger_kwargs(settings: dict) -> tuple[dict | None, str | None]:
+    """
+    از settings (schedule_type/schedule_time/schedule_day_of_week/
+    schedule_day_of_month) کلیدواژه‌های مناسب برای APScheduler's cron
+    trigger می‌سازد - هم CLI (start_scheduler) و هم GUI (gui_scheduler.py)
+    از همین یک تابع استفاده می‌کنند تا منطق تبدیل تنظیمات به cron فقط
+    یک‌جا نوشته شده باشد.
+
+    خروجی موفق: (kwargs_dict, None)
+    خروجی ناموفق: (None, "شرح خطا")
+    """
+    schedule_type = settings.get("schedule_type", "daily")
+    schedule_time = settings.get("schedule_time", "00:00")
+    try:
+        hour, minute = map(int, schedule_time.split(":"))
+        if not (0 <= hour < 24 and 0 <= minute < 60):
+            raise ValueError
+    except Exception:
+        return None, f"Invalid schedule_time value {schedule_time!r}"
+
+    kwargs = {"hour": hour, "minute": minute}
+
+    if schedule_type == "weekly":
+        weekday = settings.get("schedule_day_of_week", "monday")
+        weekday = WEEKDAY_ALIASES.get(str(weekday).strip().lower(), str(weekday).strip().lower())
+        if weekday not in WEEKDAY_ALIASES.values():
+            return None, f"Invalid schedule_day_of_week value {settings.get('schedule_day_of_week')!r}. Use monday..sunday."
+        kwargs["day_of_week"] = weekday
+
+    elif schedule_type == "monthly":
+        try:
+            day_of_month = int(settings.get("schedule_day_of_month", 1))
+            if not (1 <= day_of_month <= 28):
+                raise ValueError
+        except Exception:
+            return None, f"Invalid schedule_day_of_month value {settings.get('schedule_day_of_month')!r}"
+        kwargs["day"] = day_of_month
+
+    elif schedule_type != "daily":
+        return None, f"Unknown schedule_type value {schedule_type!r}"
+
+    return kwargs, None
+
+
+def describe_schedule(settings: dict) -> str:
+    """شرح انسان‌خوان زمان‌بندی فعلی - برای نمایش در UI/لاگ (نه برای APScheduler)."""
+    schedule_type = settings.get("schedule_type", "daily")
+    schedule_time = settings.get("schedule_time", "00:00")
+    if schedule_type == "weekly":
+        return f"weekly on {settings.get('schedule_day_of_week', 'monday')} at {schedule_time}"
+    if schedule_type == "monthly":
+        return f"monthly on day {settings.get('schedule_day_of_month', 1)} at {schedule_time}"
+    return f"daily at {schedule_time}"
+
+
 def start_scheduler(devices: list, settings: dict) -> None:
     """
     APScheduler را با فاصله‌ی زمانی تنظیم‌شده در settings راه‌اندازی
-    می‌کند. اولین اجرا بلافاصله انجام می‌شود، بعد طبق interval تکرار
-    می‌شود. این حالت بلاک‌کننده است (تا Ctrl+C).
+    می‌کند. این حالت بلاک‌کننده است (تا Ctrl+C) - مناسب CLI، نه GUI
+    (برای GUI از gui_scheduler.GuiScheduler با BackgroundScheduler
+    استفاده کنید که ترد UI را بلاک نمی‌کند).
     """
     try:
         from apscheduler.schedulers.blocking import BlockingScheduler
     except ModuleNotFoundError:
         logger.error("APScheduler is not installed. Install it with: pip install apscheduler")
+        return
+
+    cron_kwargs, error = build_cron_trigger_kwargs(settings)
+    if error:
+        logger.error("Could not start scheduler: %s", error)
         return
 
     scheduler = BlockingScheduler()
@@ -1573,77 +1645,16 @@ def start_scheduler(devices: list, settings: dict) -> None:
         f"devices_marked_for_auto_backup={sum(1 for d in devices if d.get('auto_backup'))}",
     )
 
-    schedule_type = settings.get("schedule_type", "daily")
-    schedule_time = settings.get("schedule_time", "00:00")
-    try:
-        hour, minute = map(int, schedule_time.split(":"))
-    except Exception as e:
-        logger.error("Invalid schedule_time value %r: %s", schedule_time, e)
-        return
-
-    if schedule_type == "weekly":
-        weekday = settings.get("schedule_day_of_week", "monday")
-        weekday_aliases = {
-            "monday": "mon",
-            "tuesday": "tue",
-            "wednesday": "wed",
-            "thursday": "thu",
-            "friday": "fri",
-            "saturday": "sat",
-            "sunday": "sun",
-        }
-        weekday = weekday_aliases.get(str(weekday).strip().lower(), str(weekday))
-        if weekday not in weekday_aliases.values():
-            logger.error("Invalid schedule_day_of_week value %r. Use monday..sunday.", settings.get("schedule_day_of_week"))
-            return
-
-        scheduler.add_job(
-            run_scheduled_backup_job,
-            "cron",
-            day_of_week=weekday,
-            hour=hour,
-            minute=minute,
-            args=[devices, settings],
-        )
-        logger.info(
-            "Scheduled auto-backup started - every %s at %s. Press Ctrl+C to stop and return to the menu.",
-            schedule_type,
-            schedule_time,
-        )
-    elif schedule_type == "monthly":
-        try:
-            day_of_month = int(settings.get("schedule_day_of_month", 1))
-        except Exception as e:
-            logger.error("Invalid schedule_day_of_month value %r: %s", settings.get("schedule_day_of_month"), e)
-            return
-
-        scheduler.add_job(
-            run_scheduled_backup_job,
-            "cron",
-            day=day_of_month,
-            hour=hour,
-            minute=minute,
-            args=[devices, settings],
-        )
-        logger.info(
-            "Scheduled auto-backup started - every %s day %s at %s. Press Ctrl+C to stop and return to the menu.",
-            schedule_type,
-            day_of_month,
-            schedule_time,
-        )
-    else:
-        scheduler.add_job(
-            run_scheduled_backup_job,
-            "cron",
-            hour=hour,
-            minute=minute,
-            args=[devices, settings],
-        )
-        logger.info(
-            "Scheduled auto-backup started - every %s at %s. Press Ctrl+C to stop and return to the menu.",
-            schedule_type,
-            schedule_time,
-        )
+    scheduler.add_job(
+        run_scheduled_backup_job,
+        "cron",
+        args=[devices, settings],
+        **cron_kwargs,
+    )
+    logger.info(
+        "Scheduled auto-backup started - %s. Press Ctrl+C to stop and return to the menu.",
+        describe_schedule(settings),
+    )
     try:
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
@@ -1765,12 +1776,12 @@ def disable_unattended_startup_interactive() -> None:
     )
 
 
-def run_headless_service() -> None:
+def _headless_load_devices(failure_event: str) -> list:
     """
-    نقطه‌ی ورود حالت headless - بدون منو، بدون درخواست پسورد از کاربر.
-    فقط زمانی کار می‌کند که پسورد master قبلاً از طریق منوی
-    'Backup > Enable unattended startup' با DPAPI ذخیره شده باشد.
-    این تابع مستقیماً از '--service' در انتهای فایل صدا زده می‌شود.
+    مشترک بین حالت‌های headless: پسورد master ذخیره‌شده با DPAPI را می‌خواند
+    و لیست دستگاه‌ها را رمزگشایی می‌کند. در صورت هر مشکل، رویداد
+    failure_event را در audit log ثبت می‌کند و با sys.exit(1) خارج می‌شود
+    (چون در این حالت کسی پشت برنامه نیست که خطا را ببیند - فقط لاگ می‌ماند).
     """
     import windows_credential_store as wcs
 
@@ -1779,42 +1790,57 @@ def run_headless_service() -> None:
             "Unattended mode requires Windows with the 'pywin32' package "
             "installed (pip install pywin32). Exiting."
         )
-        audit_log.log_event(
-            "HEADLESS_SERVICE_START_FAILED",
-            "pywin32/DPAPI not available on this system",
-            level="ERROR",
-        )
+        audit_log.log_event(failure_event, "pywin32/DPAPI not available on this system", level="ERROR")
         sys.exit(1)
 
     master_password = wcs.load_master_password(BASE_DIR)
     if master_password is None:
         logger.error(
-            "No saved master password found for unattended mode. Run the "
-            "program interactively first and use 'Backup > Enable "
-            "unattended startup' to save it."
+            "No saved master password found for unattended mode. Enable background "
+            "backups from the GUI (Settings) or 'Backup > Enable unattended startup' "
+            "in the CLI first."
         )
-        audit_log.log_event(
-            "HEADLESS_SERVICE_START_FAILED",
-            "No saved master password found",
-            level="ERROR",
-        )
+        audit_log.log_event(failure_event, "No saved master password found", level="ERROR")
         sys.exit(1)
 
     try:
-        devices = device_manager.load_devices(master_password)
+        return device_manager.load_devices(master_password)
     except ValueError as e:
         logger.error("Could not decrypt the device list with the saved master password: %s", e)
         audit_log.log_event(
-            "HEADLESS_SERVICE_START_FAILED",
+            failure_event,
             "Saved master password could not decrypt the device list (may have been changed)",
             level="ERROR",
         )
         sys.exit(1)
 
+
+def run_headless_service() -> None:
+    """
+    نقطه‌ی ورود حالت headless دائمی ('--service') - بدون منو، بدون درخواست
+    پسورد. تا وقتی پروسه زنده است scheduler اجرا می‌ماند (مناسب 'اجرا در
+    استارتاپ ویندوز').
+    """
+    devices = _headless_load_devices("HEADLESS_SERVICE_START_FAILED")
     settings = backup_settings.load_settings()
     logger.info("Starting in unattended (service) mode - scheduled auto-backup only.")
     audit_log.log_event("HEADLESS_SERVICE_STARTED", f"{len(devices)} device(s) loaded")
     start_scheduler(devices, settings)
+
+
+def run_backup_once_headless() -> None:
+    """
+    نقطه‌ی ورود '--run-backup-once': یک دور کامل بک‌آپ روی دستگاه‌های
+    auto-backup می‌گیرد و خارج می‌شود. این همان دستوری است که Windows Task
+    Scheduler در زمان تعیین‌شده اجرا می‌کند - یعنی بک‌آپ زمان‌بندی‌شده حتی
+    وقتی هیچ پنجره‌ی GUI یا CLI باز نیست انجام می‌شود، و هیچ پروسه‌ی
+    دائمی‌ای هم در پس‌زمینه نمی‌ماند.
+    """
+    devices = _headless_load_devices("SCHEDULED_BACKUP_RUN_FAILED")
+    settings = backup_settings.load_settings()
+    audit_log.log_event("SCHEDULED_BACKUP_RUN_STARTED", f"{len(devices)} device(s) loaded (Task Scheduler)")
+    run_scheduled_backup_job(devices, settings)
+    audit_log.log_event("SCHEDULED_BACKUP_RUN_FINISHED", "Task Scheduler run completed")
 
 
 def print_main_menu() -> None:
@@ -1991,7 +2017,9 @@ def main():
 
 
 if __name__ == "__main__":
-    if "--service" in sys.argv:
+    if "--run-backup-once" in sys.argv:
+        run_backup_once_headless()
+    elif "--service" in sys.argv:
         run_headless_service()
     else:
         main()

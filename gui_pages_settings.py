@@ -5,10 +5,10 @@ gui_pages_settings.py
   2. تغییر پسورد master (رمزگشایی/رمزنگاری مجدد فایل دستگاه‌ها)
   3. انتخاب تم (روشن/تیره)
 
-توجه: خود تنظیمات زمان‌بندی فقط پارامترهای scheduler را مشخص می‌کنند -
-برای اجرای واقعی بک‌آپ خودکار در پس‌زمینه، باید یا این برنامه باز
-بماند، یا حالت headless CLI ('--service') از طریق Windows Task
-Scheduler تنظیم شود (همان چیزی که در منوی Backup نسخه‌ی CLI هست).
+توجه: با Save کردن، scheduler پس‌زمینه‌ی GUI (gui_scheduler.py) فوراً با
+تنظیمات تازه دوباره ثبت می‌شود - بک‌آپ خودکار فقط تا وقتی برنامه‌ی GUI
+باز است اجرا می‌شود. برای اجرای مستقل از باز بودن GUI، از حالت headless
+CLI ('--service' + Windows Task Scheduler) استفاده کنید.
 """
 
 from PySide6.QtWidgets import (
@@ -23,6 +23,11 @@ import device_manager
 import audit_log
 import gui_preferences
 from gui_widgets import SteppedSpinBox
+import app_paths
+import windows_task
+import windows_credential_store as wcs
+
+BASE_DIR = app_paths.get_app_dir(__file__)
 
 WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 
@@ -35,6 +40,8 @@ class SettingsPage(QWidget):
         master_password: str,
         on_password_changed,
         on_theme_changed,
+        on_schedule_saved,
+        apply_schedule,
         parent=None,
     ):
         super().__init__(parent)
@@ -43,6 +50,8 @@ class SettingsPage(QWidget):
         self.master_password = master_password
         self.on_password_changed = on_password_changed
         self.on_theme_changed = on_theme_changed
+        self.on_schedule_saved = on_schedule_saved
+        self.apply_schedule = apply_schedule
         self.preferences = gui_preferences.load_preferences()
 
         layout = QVBoxLayout(self)
@@ -131,6 +140,46 @@ class SettingsPage(QWidget):
         self.save_button.clicked.connect(self._save)
         save_row.addWidget(self.save_button)
         content_layout.addLayout(save_row)
+
+        # --- کارت بک‌آپ در پس‌زمینه (Windows Task Scheduler) ---
+        background_card = QFrame()
+        background_card.setObjectName("Card")
+        background_layout = QVBoxLayout(background_card)
+        background_layout.setContentsMargins(20, 20, 20, 20)
+        background_layout.setSpacing(12)
+
+        background_heading = QLabel("Run scheduled backups when the app is closed")
+        background_heading.setStyleSheet("font-weight: 600; font-size: 14px;")
+        background_layout.addWidget(background_heading)
+
+        background_hint = QLabel(
+            "Registers a Windows Task Scheduler task that runs the scheduled backup at the "
+            "time above, even if this application is closed. It uses your saved schedule "
+            "and reads the encrypted device list, so your master password is stored "
+            "encrypted with Windows DPAPI (readable only by your Windows account on this PC). "
+            "The PC must be on and you must be logged in at the scheduled time."
+        )
+        background_hint.setObjectName("HintLabel")
+        background_hint.setWordWrap(True)
+        background_layout.addWidget(background_hint)
+
+        self.background_status_label = QLabel("")
+        self.background_status_label.setWordWrap(True)
+        background_layout.addWidget(self.background_status_label)
+
+        background_buttons = QHBoxLayout()
+        background_buttons.addStretch()
+        self.enable_background_button = QPushButton("Enable background backups")
+        self.enable_background_button.setObjectName("PrimaryButton")
+        self.enable_background_button.clicked.connect(self._enable_background)
+        self.disable_background_button = QPushButton("Disable")
+        self.disable_background_button.clicked.connect(self._disable_background)
+        background_buttons.addWidget(self.enable_background_button)
+        background_buttons.addWidget(self.disable_background_button)
+        background_layout.addLayout(background_buttons)
+
+        content_layout.addWidget(background_card)
+        self._refresh_background_status()
 
         # --- کارت تغییر پسورد master ---
         password_card = QFrame()
@@ -247,7 +296,130 @@ class SettingsPage(QWidget):
         self.settings["backup_path"] = self.backup_path_input.text().strip() or self.settings["backup_path"]
 
         backup_settings.save_settings(self.settings)
-        QMessageBox.information(self, "Saved", "Backup settings saved.")
+
+        # ذخیره‌ی فایل به‌تنهایی کافی نیست: اگر Task ویندوز فعال است باید با
+        # زمان‌بندی تازه دوباره ثبت شود، و در هر حالت scheduler داخلی GUI هم
+        # باید با تنظیمات تازه هماهنگ شود (فقط یکی از این دو فعال می‌ماند).
+        background_active = windows_task.task_exists()
+        task_ok, task_message = True, ""
+        if background_active:
+            task_ok, task_message = windows_task.create_or_update_task(self.settings)
+            audit_log.log_event(
+                "BACKGROUND_TASK_UPDATED" if task_ok else "BACKGROUND_TASK_UPDATE_FAILED",
+                task_message,
+                level="INFO" if task_ok else "ERROR",
+            )
+
+        scheduler_ok = self.on_schedule_saved(self.settings)
+        self._refresh_background_status()
+
+        if background_active:
+            if task_ok:
+                QMessageBox.information(
+                    self,
+                    "Saved",
+                    "Backup settings saved. " + task_message + " Backups will run even when "
+                    "this application is closed.",
+                )
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Saved, but background task not updated",
+                    "Settings were saved, but the Windows scheduled task could not be updated:\n\n"
+                    + task_message,
+                )
+        elif scheduler_ok:
+            QMessageBox.information(
+                self,
+                "Saved",
+                "Backup settings saved. Automatic backup is active while this "
+                "application stays open. Enable background backups below to run "
+                "it even when the application is closed.",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Saved, but scheduler not running",
+                "Settings were saved, but the automatic backup scheduler could not "
+                "start. Make sure APScheduler is installed (pip install apscheduler) "
+                "and that the time/day values are valid. See cisco_mgmt.log for details.",
+            )
+
+    def _refresh_background_status(self) -> None:
+        reason = windows_task.unavailable_reason(wcs.is_available())
+        if reason is not None:
+            self.background_status_label.setStyleSheet("color: #f5a524; font-size: 12px;")
+            self.background_status_label.setText("Not available: " + reason)
+            self.enable_background_button.setEnabled(False)
+            self.disable_background_button.setEnabled(False)
+            return
+
+        active = windows_task.task_exists()
+        if active:
+            self.background_status_label.setStyleSheet("color: #22c55e; font-size: 12px;")
+            self.background_status_label.setText(
+                "Enabled - Windows runs the scheduled backup even when this app is closed."
+            )
+        else:
+            self.background_status_label.setStyleSheet("color: #8b93a7; font-size: 12px;")
+            self.background_status_label.setText(
+                "Disabled - scheduled backup only runs while this app is open."
+            )
+        self.enable_background_button.setEnabled(not active)
+        self.disable_background_button.setEnabled(active)
+
+    def _enable_background(self) -> None:
+        confirmed = QMessageBox.question(
+            self,
+            "Enable background backups",
+            "This saves your master password encrypted with Windows DPAPI and registers a "
+            "Windows scheduled task.\n\n"
+            "Anyone who can run code as your Windows user will be able to unlock your device "
+            "list. Only enable this on a PC/account you trust.\n\nContinue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if confirmed != QMessageBox.StandardButton.Yes:
+            return
+
+        audit_log.log_event("BACKGROUND_TASK_ENABLE_ATTEMPT", "Enable background backups requested (GUI)")
+        try:
+            wcs.save_master_password(self.master_password, BASE_DIR)
+        except Exception as e:  # noqa: BLE001 - show any DPAPI failure instead of crashing
+            audit_log.log_event("BACKGROUND_TASK_ENABLE_FAILED", f"DPAPI save failed: {e}", level="ERROR")
+            QMessageBox.warning(self, "Could not enable", f"Could not store the master password securely: {e}")
+            return
+
+        ok, message = windows_task.create_or_update_task(self.settings)
+        if not ok:
+            wcs.remove_saved_master_password(BASE_DIR)  # rollback: don't leave a stored secret without a task
+            audit_log.log_event("BACKGROUND_TASK_ENABLE_FAILED", message, level="ERROR")
+            QMessageBox.warning(self, "Could not enable", message)
+            self._refresh_background_status()
+            return
+
+        audit_log.log_event(
+            "BACKGROUND_TASK_ENABLED",
+            "Master password saved via DPAPI and Windows scheduled task registered (GUI)",
+            level="WARNING",
+        )
+        self.apply_schedule()  # in-app job is paused so the backup doesn't run twice
+        self._refresh_background_status()
+        QMessageBox.information(self, "Enabled", message + " Backups will now run even when this application is closed.")
+
+    def _disable_background(self) -> None:
+        ok, message = windows_task.delete_task()
+        if not ok:
+            QMessageBox.warning(self, "Could not disable", message)
+            self._refresh_background_status()
+            return
+
+        wcs.remove_saved_master_password(BASE_DIR)
+        audit_log.log_event("BACKGROUND_TASK_DISABLED", "Scheduled task removed and saved master password deleted (GUI)")
+        self.apply_schedule()  # in-app scheduler takes over again
+        self._refresh_background_status()
+        QMessageBox.information(
+            self, "Disabled", "Background backups disabled. Scheduled backup now runs only while this app is open."
+        )
 
     def _on_theme_toggled(self, dark_checked: bool) -> None:
         theme = "dark" if dark_checked else "light"
@@ -289,6 +461,21 @@ class SettingsPage(QWidget):
             return
 
         audit_log.log_event("MASTER_PW_CHANGED", "Master password changed (GUI)", level="WARNING")
+
+        # اگر بک‌آپ پس‌زمینه فعال است، پسورد ذخیره‌شده‌ی DPAPI هم باید عوض شود،
+        # وگرنه Task ویندوز دیگر نمی‌تواند لیست دستگاه‌ها را رمزگشایی کند و بک‌آپ‌ها
+        # بی‌صدا شکست می‌خورند.
+        if wcs.is_available() and wcs.has_saved_password(BASE_DIR):
+            try:
+                wcs.save_master_password(new, BASE_DIR)
+            except Exception as e:  # noqa: BLE001
+                audit_log.log_event("BACKGROUND_PW_UPDATE_FAILED", str(e), level="ERROR")
+                QMessageBox.warning(
+                    self,
+                    "Background backups need attention",
+                    "The master password was changed, but the copy used by background backups "
+                    "could not be updated. Disable and re-enable background backups in Settings.",
+                )
         self.master_password = new
         self.on_password_changed(new)
 
