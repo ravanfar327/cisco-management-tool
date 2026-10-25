@@ -698,39 +698,74 @@ def clean_config_for_restore(raw_config: str) -> str:
     return "\n".join(result).strip() + "\n"
 
 
+def _backup_filename_pattern(hostname: str) -> "re.Pattern":
+    """
+    الگوی دقیق نام فایل بک‌آپ یک hostname: '{hostname}_YYYY-MM-DD_HH-MM-SS[-N].txt'.
+    مطابقت دقیق (به‌جای startswith) لازم است تا hostname هایی مثل 'SW' و
+    'SW_B' فایل‌های هم را اشتباهی نشمرند یا حذف نکنند.
+    """
+    return re.compile(
+        rf"^{re.escape(hostname)}_(\d{{4}}-\d{{2}}-\d{{2}}_\d{{2}}-\d{{2}}-\d{{2}})(?:-(\d+))?\.txt$"
+    )
+
+
+def _sorted_backup_filenames(backup_dir: str, hostname: str) -> list[str]:
+    """
+    نام فایل‌های بک‌آپ یک hostname، مرتب از قدیمی به جدید. مرتب‌سازی بر اساس
+    (timestamp، شماره‌ی پسوند) است نه الفبایی، چون 'x-1.txt' از 'x.txt'
+    جدیدتر است ولی الفبایی قبل از آن می‌آید.
+    """
+    pattern = _backup_filename_pattern(hostname)
+    entries = []
+    try:
+        for f in os.listdir(backup_dir):
+            m = pattern.match(f)
+            if m:
+                entries.append((m.group(1), int(m.group(2) or 0), f))
+    except FileNotFoundError:
+        return []
+    entries.sort()
+    return [f for _, _, f in entries]
+
+
 def enforce_retention(backup_dir: str, hostname: str, retention_count: int) -> None:
     """
-    فایل‌های بک‌آپ قدیمی‌تر از تعداد نگه‌داشت مشخص‌شده را برای این
-    hostname به‌طور خودکار حذف می‌کند. چون timestamp در نام فایل به
-    فرمت YYYY-MM-DD_HH-MM-SS است، مرتب‌سازی الفبایی همان مرتب‌سازی
-    زمانی است (قدیمی‌ترها اول لیست می‌آیند).
+    فقط وقتی تعداد بک‌آپ‌های این hostname از retention_count بیشتر شد،
+    قدیمی‌ترین‌های اضافه را حذف می‌کند و جدیدترین retention_count تا را نگه
+    می‌دارد. چون timestamp در نام فایل به فرمت YYYY-MM-DD_HH-MM-SS است،
+    مرتب‌سازی الفبایی همان مرتب‌سازی زمانی است (قدیمی‌ترها اول لیست).
     """
     if retention_count <= 0:
         return
 
-    prefix = f"{hostname}_"
-    try:
-        matching = sorted(
-            f for f in os.listdir(backup_dir)
-            if f.startswith(prefix) and f.endswith(".txt")
-        )
-    except FileNotFoundError:
+    matching = _sorted_backup_filenames(backup_dir, hostname)
+
+    # باید صریحاً مثبت‌بودن excess چک شود: برش matching[:excess] با excess
+    # منفی (وقتی هنوز فایل کمتر از حد مجاز است) همه‌ی فایل‌ها به‌جز چند تای
+    # آخر را حذف می‌کند، نه هیچ‌کدام را.
+    excess = len(matching) - retention_count
+    if excess <= 0:
         return
 
-    excess = len(matching) - retention_count
     for old_file in matching[:excess]:
         try:
             os.remove(os.path.join(backup_dir, old_file))
-            print(f"Removed old backup (retention limit reached): {old_file}")
+            logger.info("Removed old backup (retention limit of %d reached): %s", retention_count, old_file)
         except OSError as e:
-            print(f"Warning: could not remove old backup '{old_file}' ({e}).")
+            logger.warning("Could not remove old backup '%s' (%s).", old_file, e)
 
 
 def save_backup(hostname: str, cleaned_config: str, backup_dir: str, retention_count: int) -> str:
     os.makedirs(backup_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filename = f"{hostname}_{timestamp}.txt"
-    filepath = os.path.join(backup_dir, filename)
+    filepath = os.path.join(backup_dir, f"{hostname}_{timestamp}.txt")
+
+    # اگر در همان ثانیه بک‌آپ دیگری از همین دستگاه گرفته شده بود، فایل قبلی را
+    # بازنویسی نکن - یک پسوند عددی اضافه کن.
+    suffix = 1
+    while os.path.exists(filepath):
+        filepath = os.path.join(backup_dir, f"{hostname}_{timestamp}-{suffix}.txt")
+        suffix += 1
 
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(cleaned_config)
@@ -747,18 +782,9 @@ def save_backup(hostname: str, cleaned_config: str, backup_dir: str, retention_c
 def list_backup_files(backup_dir: str, hostname: str) -> list[str]:
     """
     مسیر کامل تمام فایل‌های بک‌آپ یک hostname را برمی‌گرداند - مرتب از
-    قدیمی به جدید (چون timestamp تو نام فایل هست، مرتب‌سازی الفبایی
-    همان مرتب‌سازی زمانی است).
+    قدیمی به جدید.
     """
-    prefix = f"{hostname}_"
-    try:
-        matching = sorted(
-            f for f in os.listdir(backup_dir)
-            if f.startswith(prefix) and f.endswith(".txt")
-        )
-    except FileNotFoundError:
-        return []
-    return [os.path.join(backup_dir, f) for f in matching]
+    return [os.path.join(backup_dir, f) for f in _sorted_backup_filenames(backup_dir, hostname)]
 
 
 def list_backed_up_hostnames(backup_dir: str) -> list[str]:
